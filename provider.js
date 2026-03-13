@@ -11,7 +11,11 @@ export default class FolderProvider {
     let app = this.extension.getApp()
     if (app && root) {
       try {
-        app.app_info.launch([root.get_child(folder)], null)
+        let current = root;
+        for (const part of folder.split('/')) {
+            current = current.get_child(part);
+        }
+        app.app_info.launch([current], null);
       } catch (e) {
         console.error(e)
       }
@@ -46,25 +50,48 @@ export default class FolderProvider {
   }
 
   #loadFolders(root) {
-    let result = []
+    const folders = [];
     try {
       let enumerator = root.enumerate_children(
         'standard::name,standard::type',
         Gio.FileQueryInfoFlags.NONE,
         null
       )
+      
+        let info1;
+        while ((info1 = enumerator.next_file(null)) !== null) {
+            if (info1.get_file_type() !== Gio.FileType.DIRECTORY) continue;
 
-      let info
-      while ((info = enumerator.next_file(null)) !== null) {
-        if (info.get_file_type() === Gio.FileType.DIRECTORY) {
-          result.push(info.get_name())
-        }
-      }
+            const name1 = info1.get_name();
+            folders.push(name1); // 第一层：如 "project"
+
+            // 进入第二层
+            const child1 = root.get_child(name1);
+            try {
+                const enumerator2 = child1.enumerate_children(
+                    'standard::name,standard::type',
+                    Gio.FileQueryInfoFlags.NONE,
+                    null
+                );
+
+                let info2;
+                while ((info2 = enumerator2.next_file(null)) !== null) {
+                    if (info2.get_file_type() !== Gio.FileType.DIRECTORY) continue;
+                    const name2 = info2.get_name();
+                    folders.push(name1 + '/' + name2); // 第二层：如 "project/src"
+                }
+                enumerator2.close(null);
+            } catch (e) {
+                console.error(e)
+                // 忽略错误（如无权限）
+            }
+        }      
+     
       enumerator.close(null)
     } catch (e) {
       console.error(e)
     } finally {
-      return result
+      return folders
     }
   }
 }
